@@ -49,6 +49,15 @@ const outputNameMap = {
   'node18-macos-arm64': 'antigravity-macos-arm64'
 };
 
+// 平台对应的 bin 文件映射
+const binFileMap = {
+  'node18-win-x64': 'antigravity_requester_windows_amd64.exe',
+  'node18-linux-x64': 'antigravity_requester_linux_amd64',
+  'node18-linux-arm64': 'antigravity_requester_android_arm64',  // ARM64 使用 Android 版本
+  'node18-macos-x64': 'antigravity_requester_linux_amd64',      // macOS x64 暂用 Linux 版本
+  'node18-macos-arm64': 'antigravity_requester_android_arm64'   // macOS ARM64 暂用 Android 版本
+};
+
 console.log('📦 Step 1: Bundling with esbuild...');
 
 // 使用 esbuild 打包成 CommonJS
@@ -196,7 +205,7 @@ try {
     console.log('  ✓ Copied public directory');
   }
   
-  // 复制 bin 目录（使用系统命令，因为 fs.cpSync 可能在大文件上失败）
+  // 复制 bin 目录（只复制对应平台的文件）
   const binSrcDir = path.join(rootDir, 'src', 'bin');
   const binDestDir = path.join(distDir, 'bin');
   if (fs.existsSync(binSrcDir)) {
@@ -205,17 +214,34 @@ try {
     }
     fs.mkdirSync(binDestDir, { recursive: true });
     
-    // 使用系统命令复制
-    try {
-      if (process.platform === 'win32') {
-        execSync(`xcopy /E /I /Y "${binSrcDir}" "${binDestDir}"`, { stdio: 'pipe', shell: true });
-      } else {
-        execSync(`cp -r "${binSrcDir}"/* "${binDestDir}/"`, { stdio: 'pipe', shell: true });
+    // 只复制对应平台的 bin 文件
+    const targetBinFiles = isMultiTarget
+      ? [...new Set(targets.map(t => binFileMap[t]).filter(Boolean))]  // 多目标：去重后的所有文件
+      : [binFileMap[resolvedTarget]].filter(Boolean);  // 单目标：只复制一个文件
+    
+    if (targetBinFiles.length > 0) {
+      for (const binFile of targetBinFiles) {
+        const srcPath = path.join(binSrcDir, binFile);
+        const destPath = path.join(binDestDir, binFile);
+        if (fs.existsSync(srcPath)) {
+          fs.copyFileSync(srcPath, destPath);
+          console.log(`  ✓ Copied bin/${binFile}`);
+        } else {
+          console.warn(`  ⚠ Warning: bin/${binFile} not found`);
+        }
       }
-      console.log('  ✓ Copied bin directory');
-    } catch (err) {
-      console.error('  ⚠ Warning: Failed to copy bin directory:', err.message);
-      console.log('  Please manually copy src/bin to dist/bin');
+    } else {
+      // 如果没有映射，复制所有文件（兼容旧行为）
+      try {
+        if (process.platform === 'win32') {
+          execSync(`xcopy /E /I /Y "${binSrcDir}" "${binDestDir}"`, { stdio: 'pipe', shell: true });
+        } else {
+          execSync(`cp -r "${binSrcDir}"/* "${binDestDir}/"`, { stdio: 'pipe', shell: true });
+        }
+        console.log('  ✓ Copied all bin files');
+      } catch (err) {
+        console.error('  ⚠ Warning: Failed to copy bin directory:', err.message);
+      }
     }
   }
   

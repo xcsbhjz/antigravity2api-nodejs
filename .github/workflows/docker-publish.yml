@@ -15,12 +15,21 @@ jobs:
     permissions:
       contents: read
       packages: write
+    
+    strategy:
+      matrix:
+        include:
+          - target: linux
+            arch: amd64
+            tag_suffix: ""
+          - target: linux-arm64
+            arch: arm64
+            tag_suffix: "-arm64"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 二进制构建：先编译再构建 Docker
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -30,8 +39,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Linux binary
-        run: npm run build:linux
+      - name: Build binary for ${{ matrix.arch }}
+        run: npm run build:${{ matrix.target }}
 
       - name: List dist contents
         run: |
@@ -42,7 +51,7 @@ jobs:
 
       - name: Set executable permissions
         run: |
-          chmod +x dist/antigravity-linux-x64
+          chmod +x dist/antigravity-* || true
           chmod +x dist/bin/* || true
 
       - name: Set up Docker Buildx
@@ -61,10 +70,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=raw,value=binary,enable=true
+            type=ref,event=branch,suffix=${{ matrix.tag_suffix }}
+            type=raw,value=binary${{ matrix.tag_suffix }},enable=true
 
-      - name: Build and push
+      - name: Build and push (${{ matrix.arch }})
         uses: docker/build-push-action@v5
         with:
           context: .

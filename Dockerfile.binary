@@ -2,7 +2,7 @@
 # 这个镜像更小，启动更快，内存占用更低
 #
 # 构建方式：
-# 1. 先运行 npm run build:linux 生成 dist 目录
+# 1. 先运行 npm run build:linux 或 npm run build:linux-arm64 生成 dist 目录
 # 2. 然后运行 docker build -f Dockerfile.binary -t antigravity .
 
 FROM debian:bookworm-slim
@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制编译后的文件（由 CI 工作流预先编译）
-COPY dist/antigravity-linux-x64 /app/antigravity
+# 使用通配符匹配不同架构的二进制文件
+COPY dist/antigravity-linux-* /app/antigravity
 COPY dist/public /app/public
 COPY dist/bin /app/bin
 COPY dist/config.json /app/config.json
@@ -37,23 +38,37 @@ RUN cat > /app/entrypoint.sh << 'EOF'
 # 同步环境变量到 .env 文件
 ENV_FILE="/app/.env"
 
-# 需要同步的环境变量列表
-KEYS="API_KEY ADMIN_USERNAME ADMIN_PASSWORD JWT_SECRET PROXY SYSTEM_INSTRUCTION IMAGE_BASE_URL"
-
-for key in $KEYS; do
-  value=$(eval echo \$$key)
-  if [ -n "$value" ]; then
+# 同步单个环境变量的函数
+# 使用 ${var+x} 语法检测变量是否被设置（包括空值）
+sync_env() {
+  key=$1
+  # 检查环境变量是否被设置（包括空值）
+  if eval "[ \"\${${key}+x}\" ]"; then
+    value=$(eval echo \"\$$key\")
     # 检查是否已存在该配置
     if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
-      # 替换现有配置
-      sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+      # 替换现有配置（使用 # 作为分隔符避免值中的特殊字符问题）
+      sed -i "s#^${key}=.*#${key}=${value}#" "$ENV_FILE"
     else
       # 添加新配置
       echo "${key}=${value}" >> "$ENV_FILE"
     fi
-    echo "✓ 已同步环境变量: ${key}"
+    if [ -n "$value" ]; then
+      echo "✓ 已同步环境变量: ${key}=${value}"
+    else
+      echo "✓ 已同步环境变量: ${key}=(空值)"
+    fi
   fi
-done
+}
+
+# 同步所有支持的环境变量
+sync_env "API_KEY"
+sync_env "ADMIN_USERNAME"
+sync_env "ADMIN_PASSWORD"
+sync_env "JWT_SECRET"
+sync_env "PROXY"
+sync_env "SYSTEM_INSTRUCTION"
+sync_env "IMAGE_BASE_URL"
 
 # 启动应用
 exec /app/antigravity
