@@ -9,15 +9,26 @@ import { getThoughtSignatureForModel, getToolSignatureForModel, sanitizeToolName
  * 获取签名上下文
  * @param {string} sessionId - 会话 ID
  * @param {string} actualModelName - 实际模型名称
+ * @param {boolean} hasTools - 请求中是否包含工具定义
  * @returns {Object} 包含思维签名和工具签名的对象
  */
-export function getSignatureContext(sessionId, actualModelName) {
+export function getSignatureContext(sessionId, actualModelName, hasTools = false) {
   const cachedReasoningSig = config.useCachedSignature ? getReasoningSignature(sessionId, actualModelName) : null;
-  const cachedToolSig = config.useCachedSignature ? getToolSignature(sessionId, actualModelName) : null;
+  
+  // 工具签名的获取逻辑：
+  // - 当 cacheOnlyToolSignatures 为 true 时，只有在 hasTools 为 true 时才从缓存获取
+  // - 当 cacheOnlyToolSignatures 为 false 时，总是从缓存获取（原有行为）
+  const shouldGetCachedToolSig = config.useCachedSignature && 
+    (!config.cacheOnlyToolSignatures || hasTools);
+  const cachedToolSig = shouldGetCachedToolSig ? getToolSignature(sessionId, actualModelName) : null;
+
+  // 兜底签名逻辑也要遵循相同规则
+  const shouldUseFallbackToolSig = config.useFallbackSignature && 
+    (!config.cacheOnlyToolSignatures || hasTools);
 
   return {
     reasoningSignature: cachedReasoningSig || (config.useFallbackSignature ? getThoughtSignatureForModel(actualModelName) : null),
-    toolSignature: cachedToolSig || (config.useFallbackSignature ? getToolSignatureForModel(actualModelName) : null)
+    toolSignature: cachedToolSig || (shouldUseFallbackToolSig ? getToolSignatureForModel(actualModelName) : null)
   };
 }
 

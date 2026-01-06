@@ -43,9 +43,9 @@ function extractImagesFromClaudeContent(content) {
   return result;
 }
 
-function handleClaudeAssistantMessage(message, antigravityMessages, enableThinking, actualModelName, sessionId) {
+function handleClaudeAssistantMessage(message, antigravityMessages, enableThinking, actualModelName, sessionId, hasTools) {
   const content = message.content;
-  const { reasoningSignature, toolSignature } = getSignatureContext(sessionId, actualModelName);
+  const { reasoningSignature, toolSignature } = getSignatureContext(sessionId, actualModelName, hasTools);
 
   let textContent = '';
   const toolCalls = [];
@@ -72,7 +72,11 @@ function handleClaudeAssistantMessage(message, antigravityMessages, enableThinki
   const parts = [];
   
   if (enableThinking) {
-    parts.push(createThoughtPart(' ', messageSignature || reasoningSignature || toolSignature));
+    const signature = messageSignature || reasoningSignature || toolSignature;
+    // 只有在有签名时才添加 thought part，避免 API 报错
+    if (signature) {
+      parts.push(createThoughtPart(' ', signature));
+    }
   }
   if (hasContent) {
     const part = { text: textContent.trimEnd() };
@@ -104,7 +108,7 @@ function handleClaudeToolResult(message, antigravityMessages) {
   }
 }
 
-function claudeMessageToAntigravity(claudeMessages, enableThinking, actualModelName, sessionId) {
+function claudeMessageToAntigravity(claudeMessages, enableThinking, actualModelName, sessionId, hasTools) {
   const antigravityMessages = [];
   for (const message of claudeMessages) {
     if (message.role === 'user') {
@@ -116,7 +120,7 @@ function claudeMessageToAntigravity(claudeMessages, enableThinking, actualModelN
         pushUserMessage(extracted, antigravityMessages);
       }
     } else if (message.role === 'assistant') {
-      handleClaudeAssistantMessage(message, antigravityMessages, enableThinking, actualModelName, sessionId);
+      handleClaudeAssistantMessage(message, antigravityMessages, enableThinking, actualModelName, sessionId, hasTools);
     }
   }
   return antigravityMessages;
@@ -127,9 +131,12 @@ export function generateClaudeRequestBody(claudeMessages, modelName, parameters,
   const actualModelName = modelMapping(modelName);
   const mergedSystem = mergeSystemInstruction(config.systemInstruction || '', systemPrompt);
 
+  const tools = convertClaudeToolsToAntigravity(claudeTools, token.sessionId, actualModelName);
+  const hasTools = tools && tools.length > 0;
+
   return buildRequestBody({
-    contents: claudeMessageToAntigravity(claudeMessages, enableThinking, actualModelName, token.sessionId),
-    tools: convertClaudeToolsToAntigravity(claudeTools, token.sessionId, actualModelName),
+    contents: claudeMessageToAntigravity(claudeMessages, enableThinking, actualModelName, token.sessionId, hasTools),
+    tools: tools,
     generationConfig: generateGenerationConfig(parameters, enableThinking, actualModelName),
     sessionId: token.sessionId,
     systemInstruction: mergedSystem

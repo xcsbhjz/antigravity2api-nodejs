@@ -97,7 +97,8 @@ function processModelThoughts(content, reasoningSignature, toolSignature, enable
     parts.splice(signatureIndex, 1);
   } else if (thoughtIndex !== -1 && signatureIndex === -1) {
     if (fallbackSig) parts[thoughtIndex].thoughtSignature = fallbackSig;
-  } else if (thoughtIndex === -1) {
+  } else if (thoughtIndex === -1 && fallbackSig) {
+    // 只有在有签名时才添加 thought part，避免 API 报错
     parts.unshift(createThoughtPart(' ', fallbackSig));
   }
   
@@ -143,7 +144,13 @@ export function generateGeminiRequestBody(geminiBody, modelName, token) {
   if (request.contents && Array.isArray(request.contents)) {
     processFunctionCallIds(request.contents);
 
-    const { reasoningSignature, toolSignature } = getSignatureContext(token.sessionId, actualModelName);
+    // 转换工具定义（需要在获取签名前完成，以便判断 hasTools）
+    if (request.tools && Array.isArray(request.tools)) {
+      request.tools = convertGeminiToolsToAntigravity(request.tools, token.sessionId, actualModelName);
+    }
+    
+    const hasTools = request.tools && request.tools.length > 0;
+    const { reasoningSignature, toolSignature } = getSignatureContext(token.sessionId, actualModelName, hasTools);
 
     request.contents.forEach(content => {
       if (content.role === 'model' && content.parts && Array.isArray(content.parts)) {
@@ -159,11 +166,6 @@ export function generateGeminiRequestBody(geminiBody, modelName, token) {
   request.generationConfig = toGenerationConfig(normalizedParams, enableThinking, actualModelName);
   request.sessionId = token.sessionId;
   delete request.safetySettings;
-  
-  // 转换工具定义
-  if (request.tools && Array.isArray(request.tools)) {
-    request.tools = convertGeminiToolsToAntigravity(request.tools, token.sessionId, actualModelName);
-  }
   
   // 添加工具配置
   if (request.tools && request.tools.length > 0 && !request.toolConfig) {

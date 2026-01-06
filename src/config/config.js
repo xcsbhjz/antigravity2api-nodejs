@@ -168,6 +168,9 @@ export function buildConfig(jsonConfig) {
     passSignatureToClient: jsonConfig.other?.passSignatureToClient === true,
     useFallbackSignature: jsonConfig.other?.useFallbackSignature !== false,
     useCachedSignature: jsonConfig.other?.useCachedSignature !== false,
+    cacheOnlyToolSignatures: jsonConfig.other?.cacheOnlyToolSignatures === true ||
+      process.env.CACHE_ONLY_TOOL_SIGNATURES === '1' ||
+      process.env.CACHE_ONLY_TOOL_SIGNATURES === 'true',
     // 调试：完整打印最终请求体与原始响应（可能包含敏感内容/大体积数据）
     debugDumpRequestResponse:
       jsonConfig.other?.debugDumpRequestResponse === true ||

@@ -74,6 +74,7 @@ async function loadConfig() {
                 if (form.elements['PASS_SIGNATURE_TO_CLIENT']) form.elements['PASS_SIGNATURE_TO_CLIENT'].checked = json.other.passSignatureToClient || false;
                 if (form.elements['USE_CACHED_SIGNATURE']) form.elements['USE_CACHED_SIGNATURE'].checked = json.other.useCachedSignature !== false;
                 if (form.elements['USE_FALLBACK_SIGNATURE']) form.elements['USE_FALLBACK_SIGNATURE'].checked = json.other.useFallbackSignature !== false;
+                if (form.elements['CACHE_ONLY_TOOL_SIGNATURES']) form.elements['CACHE_ONLY_TOOL_SIGNATURES'].checked = json.other.cacheOnlyToolSignatures || false;
             }
             if (json.rotation) {
                 if (form.elements['ROTATION_STRATEGY']) {
@@ -169,6 +170,7 @@ async function saveConfig(e) {
     jsonConfig.other.passSignatureToClient = form.elements['PASS_SIGNATURE_TO_CLIENT']?.checked || false;
     jsonConfig.other.useCachedSignature = form.elements['USE_CACHED_SIGNATURE']?.checked ?? true;
     jsonConfig.other.useFallbackSignature = form.elements['USE_FALLBACK_SIGNATURE']?.checked ?? true;
+    jsonConfig.other.cacheOnlyToolSignatures = form.elements['CACHE_ONLY_TOOL_SIGNATURES']?.checked || false;
     
     Object.entries(allConfig).forEach(([key, value]) => {
         if (sensitiveKeys.includes(key)) {
@@ -192,7 +194,7 @@ async function saveConfig(e) {
                 const num = parseInt(value);
                 jsonConfig.other.retryTimes = Number.isNaN(num) ? undefined : num;
             }
-            else if (key === 'SKIP_PROJECT_ID_FETCH' || key === 'USE_NATIVE_AXIOS' || key === 'USE_CONTEXT_SYSTEM_PROMPT' || key === 'PASS_SIGNATURE_TO_CLIENT' || key === 'USE_CACHED_SIGNATURE' || key === 'USE_FALLBACK_SIGNATURE') {
+            else if (key === 'SKIP_PROJECT_ID_FETCH' || key === 'USE_NATIVE_AXIOS' || key === 'USE_CONTEXT_SYSTEM_PROMPT' || key === 'PASS_SIGNATURE_TO_CLIENT' || key === 'USE_CACHED_SIGNATURE' || key === 'USE_FALLBACK_SIGNATURE' || key === 'CACHE_ONLY_TOOL_SIGNATURES') {
                 // 跳过，已在上面处理
             }
             else if (key === 'ROTATION_STRATEGY') jsonConfig.rotation.strategy = value || undefined;

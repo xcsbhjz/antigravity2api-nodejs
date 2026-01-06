@@ -44,10 +44,10 @@ function extractImagesFromContent(content) {
   return result;
 }
 
-function handleAssistantMessage(message, antigravityMessages, enableThinking, actualModelName, sessionId) {
+function handleAssistantMessage(message, antigravityMessages, enableThinking, actualModelName, sessionId, hasTools) {
   const hasToolCalls = message.tool_calls && message.tool_calls.length > 0;
   const hasContent = message.content && message.content.trim() !== '';
-  const { reasoningSignature, toolSignature } = getSignatureContext(sessionId, actualModelName);
+  const { reasoningSignature, toolSignature } = getSignatureContext(sessionId, actualModelName, hasTools);
 
   const toolCalls = hasToolCalls
     ? message.tool_calls.map(toolCall => {
@@ -64,7 +64,10 @@ function handleAssistantMessage(message, antigravityMessages, enableThinking, ac
     const reasoningText = (typeof message.reasoning_content === 'string' && message.reasoning_content.length > 0)
       ? message.reasoning_content : ' ';
     const signature = message.thoughtSignature || reasoningSignature || toolSignature;
-    parts.push(createThoughtPart(reasoningText, signature));
+    // 只有在有签名时才添加 thought part，避免 API 报错
+    if (signature) {
+      parts.push(createThoughtPart(reasoningText, signature));
+    }
   }
   if (hasContent) {
     const part = { text: message.content.trimEnd() };
@@ -80,14 +83,14 @@ function handleToolCall(message, antigravityMessages) {
   pushFunctionResponse(message.tool_call_id, functionName, message.content, antigravityMessages);
 }
 
-function openaiMessageToAntigravity(openaiMessages, enableThinking, actualModelName, sessionId) {
+function openaiMessageToAntigravity(openaiMessages, enableThinking, actualModelName, sessionId, hasTools) {
   const antigravityMessages = [];
   for (const message of openaiMessages) {
     if (message.role === 'user' || message.role === 'system') {
       const extracted = extractImagesFromContent(message.content);
       pushUserMessage(extracted, antigravityMessages);
     } else if (message.role === 'assistant') {
-      handleAssistantMessage(message, antigravityMessages, enableThinking, actualModelName, sessionId);
+      handleAssistantMessage(message, antigravityMessages, enableThinking, actualModelName, sessionId, hasTools);
     } else if (message.role === 'tool') {
       handleToolCall(message, antigravityMessages);
     }
@@ -114,9 +117,12 @@ export function generateRequestBody(openaiMessages, modelName, parameters, opena
     }
   }
 
+  const tools = convertOpenAIToolsToAntigravity(openaiTools, token.sessionId, actualModelName);
+  const hasTools = tools && tools.length > 0;
+
   return buildRequestBody({
-    contents: openaiMessageToAntigravity(filteredMessages, enableThinking, actualModelName, token.sessionId),
-    tools: convertOpenAIToolsToAntigravity(openaiTools, token.sessionId, actualModelName),
+    contents: openaiMessageToAntigravity(filteredMessages, enableThinking, actualModelName, token.sessionId, hasTools),
+    tools: tools,
     generationConfig: generateGenerationConfig(parameters, enableThinking, actualModelName),
     sessionId: token.sessionId,
     systemInstruction: mergedSystemInstruction
